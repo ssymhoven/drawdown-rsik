@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import pandas as pd
 from pandas import DataFrame
 from source_engine.opus_source import OpusSource
@@ -11,12 +13,16 @@ mandate = {
 query = f"""
     SELECT
         accountsegments.name, 
+        accountsegments.nav,
         reportings.report_date, 
         positions.name as position_name,
         positions.average_entry_quote,
         positions.volume,
         positions.position_type,
-        positions.underlying_name
+        positions.underlying_name,
+        positions.price_per_point,
+        positions.last_xrate_quantity,
+        positions.total_exposure
     FROM
         reportings
             JOIN
@@ -54,3 +60,87 @@ def get_futures_data() -> dict[str, DataFrame]:
         df['50D_SMAVG'] = df['#PX_LAST'].rolling(window=50).mean()
 
     return data
+
+
+def momentum_table(data: pd.DataFrame) -> pd.DataFrame:
+    periods = [1, 2, 3, 5, 10, 20, 30]
+    metrics = {}
+
+    last_px = data['#PX_LAST'].iloc[-1]
+
+    for period in periods:
+        if len(data) > period:
+            momentum = (last_px - data['#PX_LAST'].iloc[-(period + 1)]) / data['#PX_LAST'].iloc[-(period + 1)] * 100
+            metrics[f'{period}D'] = momentum
+
+    year_start = datetime(data.index[-1].year, 1, 1)
+    if year_start in data.index:
+        momentum_ytd = (last_px - data.loc[year_start, '#PX_LAST']) / data.loc[year_start, '#PX_LAST'] * 100
+    else:
+        first_date = data[data.index >= year_start].iloc[0]
+        momentum_ytd = (last_px - first_date['#PX_LAST']) / first_date['#PX_LAST'] * 100
+
+    metrics['YTD'] = momentum_ytd
+    momentum_df = pd.DataFrame(list(metrics.items()), columns=['Metric', 'Value'])
+    momentum_df.set_index('Metric', inplace=True)
+
+    return momentum_df
+
+
+def escape_latex(s):
+    return s.replace('&', r'\&') \
+            .replace('%', r'\%') \
+            .replace('$', r'\$') \
+            .replace('#', r'\#') \
+            .replace('_', r'\_') \
+            .replace('{', r'\{') \
+            .replace('}', r'\}') \
+            .replace('~', r'\textasciitilde{}') \
+            .replace('^', r'\textasciicircum{}')
+
+
+def position_details(data: pd.DataFrame, row: pd.Series) -> pd.DataFrame:
+    last_px = data['#PX_LAST'].iloc[-1]
+    position_type = row['position_type']
+    avg_entry_quote = row['average_entry_quote']
+
+    metrics = {}
+
+    if position_type == 'LONG':
+        profit_loss_percentage = (last_px - avg_entry_quote) / avg_entry_quote * 100
+    elif position_type == 'SHORT':
+        profit_loss_percentage = (avg_entry_quote - last_px) / avg_entry_quote * 100
+    else:
+        raise ValueError("Unsupported position type: " + position_type)
+
+    metrics['AEQ'] = avg_entry_quote
+    metrics['% since AEQ'] = profit_loss_percentage
+    metrics['Volume'] = row['volume']
+    metrics['Type'] = row['position_type']
+    metrics['P&L'] = ((last_px - avg_entry_quote) * row['price_per_point'] * row['volume'] * row['last_xrate_quantity']
+                      * (-1 if row['position_type'] == "SHORT" else 1))
+
+    metrics['Exposure'] = ((row['total_exposure'] * row['last_xrate_quantity']) / row['nav']) * 100
+
+    details_df = pd.DataFrame(list(metrics.items()), columns=['Metric', 'Value'])
+    details_df.set_index('Metric', inplace=True)
+
+    return details_df
+
+
+def drawdown(series: pd.Series):
+    previous_peaks = series.cummax()
+    drawdowns = (series - previous_peaks) / previous_peaks
+    return pd.DataFrame({
+        "Peaks": previous_peaks,
+        "Drawdowns": drawdowns
+    })
+
+
+def drawup(series: pd.Series):
+    previous_lows = series.cummin()
+    drawups = (series - previous_lows) / previous_lows
+    return pd.DataFrame({
+        "Lows": previous_lows,
+        "Drawups": drawups
+    })

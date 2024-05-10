@@ -1,0 +1,27 @@
+\documentclass{article}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage[a4paper, margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{longtable}
+
+\begin{document}
+\pagestyle{empty}
+
+{{ data.name }} - {{ data.position_name }}
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.8\textwidth]{{ '{{' }}{{ data.chart }}{{ '}}' }}
+\end{figure}
+
+\begin{center}
+{{ data.momentum }}
+\end{center}
+
+\begin{center}
+{{ data.position }}
+\end{center}
+
+\end{document}
