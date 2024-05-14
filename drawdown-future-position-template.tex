@@ -1,0 +1,46 @@
+\documentclass{article}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage[a4paper, margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{longtable}
+\usepackage{colortbl}
+\usepackage{xcolor}
+\usepackage{tabularx}
+
+\renewcommand{\familydefault}{\sfdefault}
+
+\begin{document}
+\pagestyle{empty}
+
+\section*{ Drawdown Future Positions - {{ name }} }
+
+{% for position in data.positions %}
+
+\subsection*{ {{ position.name }} - {{ position.type }} }
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=\textwidth]{{ '{{' }}{{ position.chart }}{{ '}}' }}
+\end{figure}
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=\textwidth]{{ '{{' }}{{ position.momentum }}{{ '}}' }}
+\end{figure}
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=\textwidth]{{ '{{' }}{{ position.details }}{{ '}}' }}
+\end{figure}
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=\textwidth]{{ '{{' }}{{ position.orders }}{{ '}}' }}
+\end{figure}
+{% endfor %}
+
+
+
+\end{document}
