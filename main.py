@@ -1,9 +1,9 @@
 import locale
 import os
 
-from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
+from matplotlib.colors import LinearSegmentedColormap
 
-from plot import plot_future_position_chart, plot_future_chart
+from plot import plot_future_position_chart, plot_future_chart, plot_drawdown_chart
 from utility import get_account_futures, get_futures_data, momentum_table, escape_latex, position_details, \
     get_future_positions, cleanup_aux_files
 import dataframe_image as dfi
@@ -19,6 +19,7 @@ os.makedirs(os.path.join(output_dir, "images"), exist_ok=True)
 
 account_details = {}
 futures = []
+
 
 if __name__ == '__main__':
 
@@ -84,6 +85,7 @@ if __name__ == '__main__':
     # Plot indices
     for (k, v) in futures_data.items():
         chart = plot_future_chart(data=v, underlying_name=k)
+        drawdown_chart = plot_drawdown_chart(data=v, underlying_name=k)
 
         momentum = momentum_table(data=v).T
         max_abs_value = max(abs(momentum.min().min()), abs(momentum.max().max()))
@@ -96,9 +98,11 @@ if __name__ == '__main__':
         futures.append({
             'name': escape_latex(k),
             'chart': chart,
-            'momentum': f'output/images/{k}_momentum.png'
+            'momentum': f'output/images/{k}_momentum.png',
+            'drawdown': drawdown_chart
         })
 
+    # Plot Future Positions Report
     for name, positions in account_details.items():
 
         with open('drawdown-future-position-template.tex', 'r') as file:
@@ -113,17 +117,25 @@ if __name__ == '__main__':
 
         subprocess.run(['pdflatex', report_path, '-output-directory', output_dir, f'-jobname={name} Futures'])
 
-    with open('future-template.tex', 'r') as file:
+    # Render Future Detail Report
+    with open('future-overview-detail-template.tex', 'r') as file:
         template = Template(file.read())
-
     rendered = template.render(data=futures)
 
     report_path = os.path.join(output_dir, "report.tex")
-
     with open(report_path, 'w') as file:
         file.write(rendered)
+    subprocess.run(['pdflatex', report_path, '-output-directory', output_dir, f'-jobname=Futures Detail Overview'])
 
-    subprocess.run(['pdflatex', report_path, '-output-directory', output_dir, f'-jobname=Futures Overview'])
+    # Render Future Drawdown Report
+    with open('future-overview-drawdown-template.tex', 'r') as file:
+        template = Template(file.read())
+    rendered = template.render(data=futures)
+
+    report_path = os.path.join(output_dir, "report.tex")
+    with open(report_path, 'w') as file:
+        file.write(rendered)
+    subprocess.run(['pdflatex', report_path, '-output-directory', output_dir, f'-jobname=Futures Drawdown Overview'])
 
     cleanup_aux_files()
 

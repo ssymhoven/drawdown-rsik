@@ -1,12 +1,8 @@
-import os
 from datetime import datetime
-
-import matplotlib.colors as mcolors
-import numpy as np
 import pandas as pd
-from matplotlib import pyplot as plt
 from pandas import DataFrame
 from source_engine.opus_source import OpusSource
+import os
 
 mandate = {
     'D&R Aktien': '17154631',

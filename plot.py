@@ -36,7 +36,8 @@ def plot_future_position_chart(data: pd.DataFrame, account_name: str, underlying
     for _, trade in positions.iterrows():
         trade_date = pd.to_datetime(trade['Trade Date'])
         price_quantity = trade['Price']
-        ax1.plot(trade_date, price_quantity, 'o', color=drawdown_color)
+        color = 'red' if trade['Action'] == 'SELL_OPEN' else 'green'
+        ax1.plot(trade_date, price_quantity, 'o', color=color)
 
     if position_type == 'SHORT':
         dd = drawdown(data['#PX_LAST'])
@@ -117,6 +118,8 @@ def plot_future_chart(data: pd.DataFrame, underlying_name: str):
     ax2.xaxis.set_minor_locator(dates.MonthLocator(interval=1))
     ax2.xaxis.set_major_formatter(dates.DateFormatter('%b %Y'))
     ax2.yaxis.set_major_formatter(ticker.PercentFormatter())
+    ax2.yaxis.set_major_locator(ticker.AutoLocator())
+    ax2.yaxis.set_minor_locator(ticker.AutoMinorLocator())
     ax2.axhline(0, color='grey', linestyle='--', linewidth=0.5)
 
     current_drawup = du['Drawups'].iloc[-1] * 100
@@ -132,6 +135,36 @@ def plot_future_chart(data: pd.DataFrame, underlying_name: str):
     plt.legend(lines, labels, loc='upper center', bbox_to_anchor=(0.5, -0.35), frameon=False, ncol=6)
 
     filename = f"output/images/{underlying_name}.png"
+    plt.savefig(filename)
+    plt.close()
+
+    return filename
+
+
+def plot_drawdown_chart(data: pd.DataFrame, underlying_name: str):
+    fig, ax = plt.subplots(figsize=(10, 2))
+
+    dd = drawdown(data['#PX_LAST'])
+
+    ax.plot(data.index, dd['Drawdowns'] * 100, label='Drawdown', color=drawdown_color, linestyle='-', linewidth=1.5)
+
+    ax.set_xlabel('Date')
+    ax.set_ylabel('%')
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.xaxis.set_major_locator(dates.MonthLocator(interval=3))
+    ax.xaxis.set_minor_locator(dates.MonthLocator(interval=1))
+    ax.xaxis.set_major_formatter(dates.DateFormatter('%b %Y'))
+    ax.yaxis.set_major_formatter(ticker.PercentFormatter())
+    ax.yaxis.set_major_locator(ticker.AutoLocator())
+    ax.yaxis.set_minor_locator(ticker.AutoMinorLocator())
+    ax.axhline(0, color='grey', linestyle='--', linewidth=0.5)
+
+    current_drawdown = dd['Drawdowns'].iloc[-1] * 100
+    ax.text(data.index[-1], current_drawdown, f'{current_drawdown:.2f}%', color=drawdown_color, fontsize=9,
+            verticalalignment='top')
+
+    filename = f"output/images/{underlying_name}_drawdown.png"
     plt.savefig(filename)
     plt.close()
 
