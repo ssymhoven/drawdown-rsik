@@ -5,3 +5,4 @@ source_engine @ git+ssh://git@github.com/Donner-Reuschel-Luxemburg-S-A/source-en
 openpyxl
 jinja2
 dataframe_image
+pdf2image
