@@ -1,8 +1,11 @@
 from datetime import datetime
+from typing import Dict
+
 import pandas as pd
 from pandas import DataFrame
 from source_engine.opus_source import OpusSource
 import os
+import win32com.client as win32
 
 mandate = {
     'D&R Aktien': '17154631',
@@ -152,6 +155,51 @@ def position_details(data: pd.DataFrame, row: pd.Series) -> pd.DataFrame:
     return details_df
 
 
+def positions_overview(data: Dict[str, pd.DataFrame], positions: pd.DataFrame) -> pd.DataFrame:
+    all_metrics = []
+
+    for idx, row in positions.iterrows():
+        name, positions_name = idx
+        underlying_name = row['underlying_name']
+        if underlying_name not in data:
+            raise ValueError(f"Underlying data '{underlying_name}' not found in provided data dictionary.")
+
+        underlying_data = data[underlying_name]
+        last_px = underlying_data['#PX_LAST'].iloc[-1]
+
+        position_type = row['position_type']
+        avg_entry_quote = row['average_entry_quote']
+
+        if position_type == 'LONG':
+            profit_loss_percentage = (last_px - avg_entry_quote) / avg_entry_quote * 100
+        elif position_type == 'SHORT':
+            profit_loss_percentage = (avg_entry_quote - last_px) / avg_entry_quote * 100
+        else:
+            raise ValueError("Unsupported position type: " + position_type)
+
+        pnl = ((last_px - avg_entry_quote) * row['price_per_point'] * row['volume'] *
+               row['last_xrate_quantity'] * (-1 if position_type == "SHORT" else 1))
+
+        exposure = ((row['total_exposure'] * row['last_xrate_quantity']) / row['nav']) * 100
+
+        metrics = {
+            'Name': name,
+            'Positions Name': positions_name,
+            'AEQ': avg_entry_quote,
+            '% since AEQ': profit_loss_percentage,
+            'Volume': row['volume'],
+            'Type': position_type,
+            'P&L': pnl,
+            'Exposure': exposure
+        }
+
+        all_metrics.append(metrics)
+
+    metrics_df = pd.DataFrame(all_metrics)
+
+    return metrics_df
+
+
 def drawdown(series: pd.Series):
     previous_peaks = series.cummax()
     drawdowns = (series - previous_peaks) / previous_peaks
@@ -176,3 +224,47 @@ def cleanup_aux_files():
         if (file.endswith(".aux") or file.endswith(".log") or file.endswith(".out") or file.endswith(".toc")
                 or file.endswith(".snm") or file.endswith(".tex")):
             os.remove(os.path.join("output", file))
+
+
+def write_mail(data: Dict):
+    outlook = win32.Dispatch('outlook.application')
+    mail = outlook.CreateItem(0)
+
+    mail.Subject = "Daily Reporting - Drawdown & Future Positionen"
+
+    mail.Recipients.Add("pm-aktien")
+    mail.Recipients.Add("sadettin.yildiz@donner-reuschel.de").Type = 2
+
+    def inplace_chart(key: str):
+        image_path = data[key]
+        image_path = os.path.abspath(image_path)
+        attachment = mail.Attachments.Add(Source=image_path)
+        attachment.PropertyAccessor.SetProperty("http://schemas.microsoft.com/mapi/proptag/0x3712001F", key)
+        return key
+
+    mail.HTMLBody = f"""
+    <html>
+      <head></head>
+      <body>
+        <p>Hi zusammen, <br><br>
+            
+            die Kurse der anhängenden Charts sind vom <b>{datetime.now().strftime('%d.%m.%Y %H:%M')}</b>.<br><br>
+           <b>Drawdown</b> wichtiger Indizes Futures:<br><br>
+           <img src="cid:{inplace_chart(key='drawdown')}"><br><br>
+           Außerdem die <b>aktuellen Future Positionen</b> mit Valuta <b>{datetime.today().strftime('%d.%m.%Y')}</b> über alle Fonds:<br><br>
+           <img src="cid:{inplace_chart(key='positions')}"><br><br>
+           Im Anhang findet ihr zu jedem Fond eine detaillierte Übersicht der einzelnen Future Positionen, sowie eine
+           detaillierte Übersicht aller Futures.
+        </p>
+      </body>
+    </html>
+    """
+
+    for file_path in data.get('files', []):
+        if os.path.exists(file_path):
+            file_path = os.path.abspath(file_path)
+            mail.Attachments.Add(Source=file_path)
+
+    mail.Recipients.ResolveAll()
+    mail.Display(True)
+

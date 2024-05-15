@@ -5,10 +5,11 @@ from matplotlib.colors import LinearSegmentedColormap
 
 from plot import plot_future_position_chart, plot_future_chart, plot_drawdown_chart
 from utility import get_account_futures, get_futures_data, momentum_table, escape_latex, position_details, \
-    get_future_positions, cleanup_aux_files
+    get_future_positions, cleanup_aux_files, positions_overview, write_mail
 import dataframe_image as dfi
 from jinja2 import Template
 import subprocess
+from pdf2image import convert_from_path
 
 locale.setlocale(locale.LC_ALL, 'German')
 account_future_positions = get_account_futures()
@@ -22,6 +23,9 @@ futures = []
 
 
 if __name__ == '__main__':
+    mail_data = {
+        'files': list(),
+    }
 
     # Pot Future Positions
     for (name, position_name), row in account_future_positions.iterrows():
@@ -115,7 +119,9 @@ if __name__ == '__main__':
         with open(report_path, 'w') as file:
             file.write(rendered)
 
-        subprocess.run(['pdflatex', report_path, '-output-directory', output_dir, f'-jobname={name} Futures'])
+        subprocess.run(['pdflatex', report_path, '-output-directory', output_dir, f'-jobname={name}_Futures'])
+        files = mail_data.get('files')
+        files.append(f'{output_dir}/{name}_Futures.pdf')
 
     # Render Future Detail Report
     with open('future-overview-detail-template.tex', 'r') as file:
@@ -125,7 +131,8 @@ if __name__ == '__main__':
     report_path = os.path.join(output_dir, "report.tex")
     with open(report_path, 'w') as file:
         file.write(rendered)
-    subprocess.run(['pdflatex', report_path, '-output-directory', output_dir, f'-jobname=Futures Detail Overview'])
+    subprocess.run(['pdflatex', report_path, '-output-directory', output_dir, f'-jobname=Futures_Detail_Overview'])
+    mail_data.get('files').append(f'{output_dir}/Futures_Detail_Overview.pdf')
 
     # Render Future Drawdown Report
     with open('future-overview-drawdown-template.tex', 'r') as file:
@@ -135,9 +142,33 @@ if __name__ == '__main__':
     report_path = os.path.join(output_dir, "report.tex")
     with open(report_path, 'w') as file:
         file.write(rendered)
-    subprocess.run(['pdflatex', report_path, '-output-directory', output_dir, f'-jobname=Futures Drawdown Overview'])
+    subprocess.run(['pdflatex', report_path, '-output-directory', output_dir, f'-jobname=Futures_Drawdown_Overview'])
+    page = convert_from_path(f'{output_dir}/Futures_Drawdown_Overview.pdf', dpi=120)[0]
+    page.save(f'{output_dir}/Futures_Drawdown_Overview.png', 'PNG')
+    mail_data.update({'drawdown': f'{output_dir}/Futures_Drawdown_Overview.png'})
+
+    all_positions = positions_overview(data=futures_data, positions=account_future_positions)
+    max_abs_value_aeq = max(abs(all_positions['% since AEQ'].min().min()),
+                            abs(all_positions['% since AEQ'].max().max()))
+    cm_aeq = LinearSegmentedColormap.from_list("custom_red_green", ["red", "white", "green"],
+                                               N=len(all_positions))
+
+    styled_all_positions = (all_positions.style.background_gradient(cmap=cm_aeq, subset=['% since AEQ'],
+                                                                    vmin=-max_abs_value_aeq, vmax=max_abs_value_aeq)
+                            .format({
+                                'AEQ': "{:,.2f}",
+                                '% since AEQ': "{:.2f}%",
+                                'Volume': "{:,.0f}",
+                                'P&L': "{:,.2f}",
+                                'Exposure': "{:.2f}%"
+                            }).hide(axis="index"))
+
+    dfi.export(styled_all_positions, f"{output_dir}/Positions_Overview.png", table_conversion="matplotlib")
+    mail_data.update({'positions': f'{output_dir}/Positions_Overview.png'})
 
     cleanup_aux_files()
+
+    write_mail(mail_data)
 
 
 
