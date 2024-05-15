@@ -20,7 +20,7 @@ os.makedirs(os.path.join(output_dir, "images"), exist_ok=True)
 
 account_details = {}
 futures = []
-
+mail = False
 
 if __name__ == '__main__':
     mail_data = {
@@ -168,7 +168,8 @@ if __name__ == '__main__':
 
     cleanup_aux_files()
 
-    write_mail(mail_data)
+    if mail:
+        write_mail(mail_data)
 
 
 
