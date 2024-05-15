@@ -27,7 +27,6 @@ if __name__ == '__main__':
         'files': list(),
     }
 
-    # Pot Future Positions
     for (name, position_name), row in account_future_positions.iterrows():
 
         if name not in account_details:
