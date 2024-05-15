@@ -184,7 +184,7 @@ def positions_overview(data: Dict[str, pd.DataFrame], positions: pd.DataFrame) -
 
         metrics = {
             'Name': name,
-            'Positions Name': positions_name,
+            'Position Name': positions_name,
             'AEQ': avg_entry_quote,
             '% since AEQ': profit_loss_percentage,
             'Volume': row['volume'],
