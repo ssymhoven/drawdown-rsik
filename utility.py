@@ -255,6 +255,8 @@ def write_mail(data: Dict):
            <img src="cid:{inplace_chart(key='positions')}"><br><br>
            Im Anhang findet ihr zu jedem Fond eine detaillierte Übersicht der einzelnen Future Positionen, sowie eine
            detaillierte Übersicht aller Futures.
+           <br><br>
+           Liebe Grüße
         </p>
       </body>
     </html>
