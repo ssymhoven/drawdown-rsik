@@ -20,7 +20,7 @@ os.makedirs(os.path.join(output_dir, "images"), exist_ok=True)
 
 account_details = {}
 futures = []
-mail = False
+mail = True
 
 if __name__ == '__main__':
     mail_data = {
