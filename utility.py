@@ -242,6 +242,12 @@ def write_mail(data: Dict):
         attachment.PropertyAccessor.SetProperty("http://schemas.microsoft.com/mapi/proptag/0x3712001F", key)
         return key
 
+    if 'positions' in data.keys():
+        positions_text = f"""Außerdem die <b>aktuellen Future Positionen</b> mit Valuta <b>{datetime.today().strftime('%d.%m.%Y')}</b> über alle Fonds:<br><br>
+           <img src="cid:{inplace_chart(key='positions')}"><br><br>"""
+    else:
+        positions_text = "Aktuell keine aktiven Future Postionen.<br><br>"
+
     mail.HTMLBody = f"""
     <html>
       <head></head>
@@ -251,8 +257,7 @@ def write_mail(data: Dict):
             die Kurse der anhängenden Charts sind vom <b>{datetime.now().strftime('%d.%m.%Y %H:%M')}</b>.<br><br>
            <b>Drawdown</b> wichtiger Indizes Futures:<br><br>
            <img src="cid:{inplace_chart(key='drawdown')}"><br><br>
-           Außerdem die <b>aktuellen Future Positionen</b> mit Valuta <b>{datetime.today().strftime('%d.%m.%Y')}</b> über alle Fonds:<br><br>
-           <img src="cid:{inplace_chart(key='positions')}"><br><br>
+           {positions_text}
            Im Anhang findet ihr zu jedem Fond eine detaillierte Übersicht der einzelnen Future Positionen, sowie eine
            detaillierte Übersicht aller Futures.
            <br><br>

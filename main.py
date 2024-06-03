@@ -147,23 +147,25 @@ if __name__ == '__main__':
     mail_data.update({'drawdown': f'{output_dir}/Futures_Drawdown_Overview.png'})
 
     all_positions = positions_overview(data=futures_data, positions=account_future_positions)
-    max_abs_value_aeq = max(abs(all_positions['% since AEQ'].min().min()),
-                            abs(all_positions['% since AEQ'].max().max()))
-    cm_aeq = LinearSegmentedColormap.from_list("custom_red_green", ["red", "white", "green"],
-                                               N=len(all_positions))
 
-    styled_all_positions = (all_positions.style.background_gradient(cmap=cm_aeq, subset=['% since AEQ'],
-                                                                    vmin=-max_abs_value_aeq, vmax=max_abs_value_aeq)
-                            .format({
-                                'AEQ': "{:,.2f}",
-                                '% since AEQ': "{:.2f}%",
-                                'Volume': "{:,.0f}",
-                                'P&L': "{:,.2f}",
-                                'Exposure': "{:.2f}%"
-                            }).hide(axis="index"))
+    if not all_positions.empty:
+        max_abs_value_aeq = max(abs(all_positions['% since AEQ'].min().min()),
+                                abs(all_positions['% since AEQ'].max().max()))
+        cm_aeq = LinearSegmentedColormap.from_list("custom_red_green", ["red", "white", "green"],
+                                                   N=len(all_positions))
 
-    dfi.export(styled_all_positions, f"{output_dir}/Positions_Overview.png", table_conversion="matplotlib")
-    mail_data.update({'positions': f'{output_dir}/Positions_Overview.png'})
+        styled_all_positions = (all_positions.style.background_gradient(cmap=cm_aeq, subset=['% since AEQ'],
+                                                                        vmin=-max_abs_value_aeq, vmax=max_abs_value_aeq)
+                                .format({
+                                    'AEQ': "{:,.2f}",
+                                    '% since AEQ': "{:.2f}%",
+                                    'Volume': "{:,.0f}",
+                                    'P&L': "{:,.2f}",
+                                    'Exposure': "{:.2f}%"
+                                }).hide(axis="index"))
+
+        dfi.export(styled_all_positions, f"{output_dir}/Positions_Overview.png", table_conversion="matplotlib")
+        mail_data.update({'positions': f'{output_dir}/Positions_Overview.png'})
 
     cleanup_aux_files()
 
