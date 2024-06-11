@@ -233,6 +233,7 @@ def write_mail(data: Dict):
     mail.Subject = "Daily Reporting - Drawdown & Future Positionen"
 
     mail.Recipients.Add("pm-aktien")
+    mail.Recipients.Add("amstatuser@donner-reuschel.lu")
     mail.Recipients.Add("sadettin.yildiz@donner-reuschel.de").Type = 2
 
     def inplace_chart(key: str):
