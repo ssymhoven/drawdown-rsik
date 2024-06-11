@@ -234,6 +234,7 @@ def write_mail(data: Dict):
 
     mail.Recipients.Add("pm-aktien")
     mail.Recipients.Add("amstatuser@donner-reuschel.lu")
+    mail.Recipients.Add("jan.sandermann@donner-reuschel.de")
     mail.Recipients.Add("sadettin.yildiz@donner-reuschel.de").Type = 2
 
     def inplace_chart(key: str):
