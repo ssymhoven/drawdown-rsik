@@ -161,6 +161,11 @@ def positions_overview(data: Dict[str, pd.DataFrame], positions: pd.DataFrame) -
     for idx, row in positions.iterrows():
         name, positions_name = idx
         underlying_name = row['underlying_name']
+
+        # BUG
+        if underlying_name == 'Deutsche Boerse AG German Stock Index DAX':
+            underlying_name = 'Deutsche Boerse AG German Stock'
+
         if underlying_name not in data:
             raise ValueError(f"Underlying data '{underlying_name}' not found in provided data dictionary.")
 

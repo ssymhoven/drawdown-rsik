@@ -38,6 +38,10 @@ if __name__ == '__main__':
         average_entry_quote = row['average_entry_quote']
         position_type = row['position_type']
 
+        # BUG
+        if underlying_name == 'Deutsche Boerse AG German Stock Index DAX':
+            underlying_name = 'Deutsche Boerse AG German Stock'
+
         underlying_data = futures_data.get(underlying_name, None)
 
         if underlying_data is None:
