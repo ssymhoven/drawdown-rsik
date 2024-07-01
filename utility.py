@@ -51,6 +51,7 @@ confirmations_query = """
     SELECT
         trade_date as 'Trade Date',
         valuta_date as 'Valuta Date',
+        asset_name,
         order_id,
         confirmation_status as 'Status',
         order_action as 'Action',
@@ -61,7 +62,7 @@ confirmations_query = """
     WHERE 
         account_id = '{account_id}'
         AND asset_class = 'FUTURE' 
-        AND asset_name = '{position_name}';
+        AND asset_name like '{position_name}%';
 """
 
 opus = OpusSource()
@@ -74,6 +75,7 @@ def get_account_futures() -> pd.DataFrame:
 
 
 def get_future_positions(account_id: str, position_name: str) -> pd.DataFrame:
+    position_name = position_name.split("     ")[0]
     df = opus.read_sql(query=confirmations_query.format(account_id=account_id, position_name=position_name))
     df.set_index(['order_id'], inplace=True)
     return df
