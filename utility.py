@@ -46,25 +46,6 @@ query = f"""
                                             reportings)
     """
 
-
-confirmations_query = """
-    SELECT
-        trade_date as 'Trade Date',
-        valuta_date as 'Valuta Date',
-        asset_name,
-        order_id,
-        confirmation_status as 'Status',
-        order_action as 'Action',
-        volume_quantity as 'Volume',
-        price_quantity as 'Price'
-    FROM 
-        confirmations
-    WHERE 
-        account_id = '{account_id}'
-        AND asset_class = 'FUTURE' 
-        AND asset_name like '{position_name}%';
-"""
-
 opus = OpusSource()
 
 
@@ -74,46 +55,12 @@ def get_account_futures() -> pd.DataFrame:
     return df
 
 
-def get_future_positions(account_id: str, position_name: str) -> pd.DataFrame:
-    position_name = position_name.split("     ")[0]
-    df = opus.read_sql(query=confirmations_query.format(account_id=account_id, position_name=position_name))
-    df.set_index(['order_id'], inplace=True)
-    return df
-
-
-def get_futures_data() -> dict[str, DataFrame]:
-    data = pd.read_excel('futures.xlsx', sheet_name=None, header=1, index_col=0)
-
-    for sheet_name, df in data.items():
-        df['#PX_LAST'] = pd.to_numeric(df['#PX_LAST'], errors='coerce')
-        df['50D_SMAVG'] = df['#PX_LAST'].rolling(window=50).mean()
+def get_futures_data() -> pd.DataFrame:
+    data = pd.read_excel('data.xlsx', sheet_name="Futures", header=0, skiprows=[1, 2], index_col=0)
+    data.index = pd.to_datetime(data.index, errors='coerce')
+    data = data.sort_index()
 
     return data
-
-
-def momentum_table(data: pd.DataFrame) -> pd.DataFrame:
-    periods = [1, 2, 3, 5, 10, 20, 30]
-    metrics = {}
-
-    last_px = data['#PX_LAST'].iloc[-1]
-
-    for period in periods:
-        if len(data) > period:
-            momentum = (last_px - data['#PX_LAST'].iloc[-(period + 1)]) / data['#PX_LAST'].iloc[-(period + 1)]
-            metrics[f'{period}D'] = momentum
-
-    year_start = datetime(data.index[-1].year, 1, 1)
-    if year_start in data.index:
-        momentum_ytd = (last_px - data.loc[year_start, '#PX_LAST']) / data.loc[year_start, '#PX_LAST']
-    else:
-        first_date = data[data.index >= year_start].iloc[0]
-        momentum_ytd = (last_px - first_date['#PX_LAST']) / first_date['#PX_LAST']
-
-    metrics['YTD'] = momentum_ytd
-    momentum_df = pd.DataFrame(list(metrics.items()), columns=['Metric', 'Value'])
-    momentum_df.set_index('Metric', inplace=True)
-
-    return momentum_df
 
 
 def escape_latex(s):
@@ -128,36 +75,7 @@ def escape_latex(s):
             .replace('^', r'\textasciicircum{}')
 
 
-def position_details(data: pd.DataFrame, row: pd.Series) -> pd.DataFrame:
-    last_px = data['#PX_LAST'].iloc[-1]
-    position_type = row['position_type']
-    avg_entry_quote = row['average_entry_quote']
-
-    metrics = {}
-
-    if position_type == 'LONG':
-        profit_loss_percentage = (last_px - avg_entry_quote) / avg_entry_quote * 100
-    elif position_type == 'SHORT':
-        profit_loss_percentage = (avg_entry_quote - last_px) / avg_entry_quote * 100
-    else:
-        raise ValueError("Unsupported position type: " + position_type)
-
-    metrics['AEQ'] = avg_entry_quote
-    metrics['% since AEQ'] = profit_loss_percentage
-    metrics['Volume'] = row['volume']
-    metrics['Type'] = row['position_type']
-    metrics['P&L'] = ((last_px - avg_entry_quote) * row['price_per_point'] * row['volume'] * row['last_xrate_quantity']
-                      * (-1 if row['position_type'] == "SHORT" else 1))
-
-    metrics['Exposure'] = ((row['total_exposure'] * row['last_xrate_quantity']) / row['nav']) * 100
-
-    details_df = pd.DataFrame(list(metrics.items()), columns=['Metric', 'Value'])
-    details_df.set_index('Metric', inplace=True)
-
-    return details_df
-
-
-def positions_overview(data: Dict[str, pd.DataFrame], positions: pd.DataFrame) -> pd.DataFrame:
+def positions_overview(data: pd.DataFrame, positions: pd.DataFrame) -> pd.DataFrame:
     all_metrics = []
 
     for idx, row in positions.iterrows():
@@ -168,11 +86,10 @@ def positions_overview(data: Dict[str, pd.DataFrame], positions: pd.DataFrame) -
         if underlying_name == 'Deutsche Boerse AG German Stock Index DAX':
             underlying_name = 'Deutsche Boerse AG German Stock'
 
-        if underlying_name not in data:
+        if underlying_name not in data.columns:
             raise ValueError(f"Underlying data '{underlying_name}' not found in provided data dictionary.")
 
-        underlying_data = data[underlying_name]
-        last_px = underlying_data['#PX_LAST'].iloc[-1]
+        last_px = data[underlying_name].iloc[-1]
 
         position_type = row['position_type']
         avg_entry_quote = row['average_entry_quote']
@@ -216,15 +133,6 @@ def drawdown(series: pd.Series):
     })
 
 
-def drawup(series: pd.Series):
-    previous_lows = series.cummin()
-    drawups = (series - previous_lows) / previous_lows
-    return pd.DataFrame({
-        "Lows": previous_lows,
-        "Drawups": drawups
-    })
-
-
 def cleanup_aux_files():
     files = os.listdir("output")
     for file in files:
@@ -237,7 +145,7 @@ def write_mail(data: Dict):
     outlook = win32.Dispatch('outlook.application')
     mail = outlook.CreateItem(0)
 
-    mail.Subject = "Daily Reporting - Drawdown & Future Positionen"
+    mail.Subject = "Daily Reporting - Positionierung, Drawdown & Risikomanagement"
 
     mail.Recipients.Add("pm-aktien")
     mail.Recipients.Add("amstatuser@donner-reuschel.lu")
@@ -252,7 +160,7 @@ def write_mail(data: Dict):
         return key
 
     if 'positions' in data.keys():
-        positions_text = f"""Außerdem die <b>aktuellen Future Positionen</b> mit Valuta <b>{datetime.today().strftime('%d.%m.%Y')}</b> über alle Fonds:<br><br>
+        positions_text = f"""<h1>Aktuelle Future Positionen</h1><br><br>
            <img src="cid:{inplace_chart(key='positions')}"><br><br>"""
     else:
         positions_text = "Aktuell keine aktiven Future Postionen.<br><br>"
@@ -261,25 +169,17 @@ def write_mail(data: Dict):
     <html>
       <head></head>
       <body>
-        <p>Hi zusammen, <br><br>
+        <p>Guten Morgen, <br><br>
             
-            die Kurse der anhängenden Charts sind vom <b>{datetime.now().strftime('%d.%m.%Y %H:%M')}</b>.<br><br>
-           <b>Drawdown</b> wichtiger Indizes Futures:<br><br>
+           <h1>Drawdown</h1>
            <img src="cid:{inplace_chart(key='drawdown')}"><br><br>
            {positions_text}
-           Im Anhang findet ihr zu jedem Fond eine detaillierte Übersicht der einzelnen Future Positionen, sowie eine
-           detaillierte Übersicht aller Futures.
            <br><br>
            Liebe Grüße
         </p>
       </body>
     </html>
     """
-
-    for file_path in data.get('files', []):
-        if os.path.exists(file_path):
-            file_path = os.path.abspath(file_path)
-            mail.Attachments.Add(Source=file_path)
 
     mail.Recipients.ResolveAll()
     mail.Display(True)
