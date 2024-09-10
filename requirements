@@ -6,3 +6,4 @@ openpyxl
 jinja2
 dataframe_image
 pdf2image
+selenium

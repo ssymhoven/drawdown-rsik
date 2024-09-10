@@ -2,65 +2,9 @@ from datetime import datetime
 from typing import Dict
 
 import pandas as pd
-from pandas import DataFrame
-from source_engine.opus_source import OpusSource
+
 import os
 import win32com.client as win32
-
-mandate = {
-    'D&R Aktien': '17154631',
-    'D&R Aktien Nachhaltigkeit': '79939969',
-    'D&R Aktien Strategie': '399443'
-}
-
-query = f"""
-    SELECT
-        accountsegments.name, 
-        accountsegments.nav,
-        accountsegments.account_id,
-        reportings.report_date, 
-        positions.name as position_name,
-        positions.average_entry_quote,
-        positions.volume,
-        positions.position_type,
-        positions.underlying_name,
-        positions.price_per_point,
-        positions.last_xrate_quantity,
-        positions.total_exposure
-    FROM
-        reportings
-            JOIN
-        accountsegments ON (accountsegments.reporting_uuid = reportings.uuid)
-            JOIN
-        positions ON (reportings.uuid = positions.reporting_uuid)
-    WHERE
-            positions.account_segment_id = accountsegments.accountsegment_id
-            AND reportings.newest = 1
-            AND reportings.report = 'positions'
-            AND positions.asset_class = 'FUTURE'
-            AND positions.dr_class_level_1 = 'EQUITY'
-            AND accountsegments.accountsegment_id in ({', '.join(mandate.values())})
-            AND reportings.report_date = (SELECT
-                                            MAX(report_date)
-                                          FROM
-                                            reportings)
-    """
-
-opus = OpusSource()
-
-
-def get_account_futures() -> pd.DataFrame:
-    df = opus.read_sql(query=query)
-    df.set_index(['name', 'position_name'], inplace=True)
-    return df
-
-
-def get_futures_data() -> pd.DataFrame:
-    data = pd.read_excel('data.xlsx', sheet_name="Futures", header=0, skiprows=[1, 2], index_col=0)
-    data.index = pd.to_datetime(data.index, errors='coerce')
-    data = data.sort_index()
-
-    return data
 
 
 def escape_latex(s):
@@ -141,29 +85,119 @@ def cleanup_aux_files():
             os.remove(os.path.join("output", file))
 
 
-def write_mail(data: Dict):
+def calc_sector_diff(us: pd.DataFrame, eu: pd.DataFrame) -> pd.DataFrame:
+    common_columns = us.columns.intersection(eu.columns)
+    common_index = us.index.intersection(eu.index)
+
+    diff = pd.DataFrame(index=common_index, columns=common_columns)
+
+    for col in common_columns:
+        for idx in common_index:
+            diff.at[idx, col] = eu.at[idx, col] - us.at[idx, col]
+
+    last_row_diff = eu.loc[eu.index[-1]] - us.loc[us.index[-1]]
+    name = f"{eu.index[-1]} - {us.index[-1]}"
+    diff = pd.concat([diff, pd.DataFrame([last_row_diff.values],
+                                         columns=common_columns,
+                                         index=[name])])
+    diff.index.name = 'GICS'
+    return diff
+
+
+def calc_universe_rel_performance_vs_sector(universe: pd.DataFrame, sector: pd.DataFrame) -> pd.DataFrame:
+    sector_mapping = sector.index.to_series().str.extract(r'(\d+)\s*(.*)')
+    sector_mapping.columns = ['Sector_Number', 'Cleaned_Sector']
+    sector_mapping['Full_Sector'] = sector.index
+    sector_mapping_dict = sector_mapping.set_index('Cleaned_Sector')['Full_Sector'].to_dict()
+
+    universe['Sector'] = universe['Sector'].map(sector_mapping_dict)
+
+    def calculate_difference(row, sector):
+        sector_row = sector.loc[row['Sector']]
+
+        for time_frame in ['1D', '5D', '1MO', 'YTD']:
+            row[f'{time_frame} vs. Sector'] = row[time_frame] - sector_row[time_frame]
+
+        return row
+
+    universe = universe.apply(
+        lambda row: calculate_difference(row, sector), axis=1
+    )
+
+    return universe
+
+
+def calc_position_rel_performance_vs_sector(positions: pd.DataFrame, us: pd.DataFrame, eu: pd.DataFrame) -> pd.DataFrame:
+    def calculate_difference(row, benchmark_df):
+        if row['Sector'] and row['Region'] in ['NORTH AMERICA', 'EU']:
+            benchmark_row = benchmark_df.loc[row['Sector']]
+
+            for time_frame in ['1D', '5D', '1MO', 'YTD']:
+                row[f'{time_frame} vs. Sector'] = row[time_frame] - benchmark_row[time_frame]
+        else:
+            for time_frame in ['1D', '5D', '1MO', 'YTD']:
+                row[f'{time_frame} vs. Sector'] = 0
+
+        return row
+
+    positions = positions.apply(
+        lambda row: calculate_difference(row, eu if row['Region'] == 'EU' else us), axis=1
+    )
+
+    return positions
+
+
+def group_funds(positions: pd.DataFrame) -> pd.DataFrame:
+    positions.reset_index(inplace=True)
+
+    positions = positions.groupby('Position Name').agg({
+        '1D': 'first',
+        '5D': 'first',
+        '1MO': 'first',
+        'YTD': 'first',
+        'Δ 200D Mvag': 'first',
+        'Δ 52 Week High': 'first',
+        'Last Price': 'first',
+        'AEQ': 'mean',
+        '% since AEQ': 'mean'
+    })
+
+    return positions
+
+
+def write_mail(positioning_data: Dict, futures_data: Dict, risk_data: Dict, third_party_data: Dict):
     outlook = win32.Dispatch('outlook.application')
     mail = outlook.CreateItem(0)
 
-    mail.Subject = "Daily Reporting - Positionierung, Drawdown & Risikomanagement"
+    mail.Subject = "Daily Reporting"
 
     mail.Recipients.Add("pm-aktien")
     mail.Recipients.Add("amstatuser@donner-reuschel.lu")
     mail.Recipients.Add("jan.sandermann@donner-reuschel.de")
     mail.Recipients.Add("sadettin.yildiz@donner-reuschel.de").Type = 2
 
-    def inplace_chart(key: str):
-        image_path = data[key]
+    def inplace_chart(image_path: str):
         image_path = os.path.abspath(image_path)
         attachment = mail.Attachments.Add(Source=image_path)
-        attachment.PropertyAccessor.SetProperty("http://schemas.microsoft.com/mapi/proptag/0x3712001F", key)
-        return key
+        cid = os.path.basename(image_path)
+        attachment.PropertyAccessor.SetProperty("http://schemas.microsoft.com/mapi/proptag/0x3712001F", cid)
+        return cid
 
-    if 'positions' in data.keys():
-        positions_text = f"""<h1>Aktuelle Future Positionen</h1><br><br>
-           <img src="cid:{inplace_chart(key='positions')}"><br><br>"""
+    region_sector_text = '<h1>Regionen & Sektoren</h1>'
+    for key, image_path in positioning_data.items():
+        cid = inplace_chart(image_path)
+        region_sector_text += f'<h3>{key}</h3><img src="cid:{cid}">'
+
+    if 'futures' in futures_data.keys():
+        futures_text = f"""<h1>Aktuelle Future Positionen</h1>
+           <img src="cid:{inplace_chart(image_path=futures_data.get('futures'))}">"""
     else:
-        positions_text = "Aktuell keine aktiven Future Postionen.<br><br>"
+        futures_text = "Aktuell keine aktiven Future Postionen."
+
+    risk_text = '<h1>Risikomanagement</h1>'
+    for key, image_path in risk_data.items():
+        cid = inplace_chart(image_path)
+        risk_text += f'<h3>{key}</h3><img src="cid:{cid}">'
 
     mail.HTMLBody = f"""
     <html>
@@ -171,11 +205,27 @@ def write_mail(data: Dict):
       <body>
         <p>Guten Morgen, <br><br>
             
-           <h1>Drawdown</h1>
-           <img src="cid:{inplace_chart(key='drawdown')}"><br><br>
-           {positions_text}
-           <br><br>
-           Liebe Grüße
+            {region_sector_text}
+            <h1>Drawdown</h1>
+            <img src="cid:{inplace_chart(futures_data.get('drawdown'))}">
+            {futures_text}
+            {risk_text}
+            <h1>Drittprodukte & Fonds</h1>
+            <h3>VV-Flex</h3>
+            <img src="cid:{inplace_chart(third_party_data.get('flex'))}">
+            
+            <h3>VV-ESG</h3>
+            <img src="cid:{inplace_chart(third_party_data.get('esg'))}">
+            
+            <h3>D&R Strategie - Select</h3>
+            <img src="cid:{inplace_chart(third_party_data.get('strategie-select'))}">
+            
+            <h3>D&R Premium Select</h3>
+            <img src="cid:{inplace_chart(third_party_data.get('premium-select'))}">
+            
+            <br><br>
+            Liebe Grüße
+            
         </p>
       </body>
     </html>
