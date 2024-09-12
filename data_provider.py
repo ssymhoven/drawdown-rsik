@@ -234,8 +234,8 @@ def calculate_quantiles(df: pd.DataFrame, columns: list) -> pd.DataFrame:
     quantiles = {}
     for column in columns:
         quantiles[column] = {
-            '1th Quantile': df[column].quantile(0.01),
-            '99th Quantile': df[column].quantile(0.99)
+            '5th Quantile': df[column].quantile(0.05),
+            '95th Quantile': df[column].quantile(0.95)
         }
     df = pd.DataFrame(quantiles).transpose()
     df = df.apply(lambda x: round(x * 2) / 2)
@@ -256,36 +256,37 @@ def filter_positions(positions: pd.DataFrame, sector: str = None) -> (pd.DataFra
         quantiles = get_quantiles(row)
         if sector:
             pos_condition = (
-                    ((row['1D vs. Sector'] > quantiles.loc['1D vs. Sector', '99th Quantile']) |
-                    (row['5D vs. Sector'] > quantiles.loc['5D vs. Sector', '99th Quantile']) |
-                    (row['1MO vs. Sector'] > quantiles.loc['1MO vs. Sector', '99th Quantile']) |
-                    (row['YTD vs. Sector'] > quantiles.loc['YTD vs. Sector', '99th Quantile'])) &
-                    ((row['1D'] > quantiles.loc['1D', '99th Quantile']) |
-                    (row['5D'] > quantiles.loc['5D', '99th Quantile']) |
-                    (row['1MO'] > quantiles.loc['1MO', '99th Quantile']) |
-                    (row['YTD'] > quantiles.loc['YTD', '99th Quantile']))
+                    ((row['1D vs. Sector'] > quantiles.loc['1D vs. Sector', '95th Quantile']) |
+                    (row['5D vs. Sector'] > quantiles.loc['5D vs. Sector', '95th Quantile']) |
+                    (row['1MO vs. Sector'] > quantiles.loc['1MO vs. Sector', '95th Quantile']) |
+                    (row['YTD vs. Sector'] > quantiles.loc['YTD vs. Sector', '95th Quantile'])) &
+                    ((row['1D'] > quantiles.loc['1D', '95th Quantile']) |
+                    (row['5D'] > quantiles.loc['5D', '95th Quantile']) |
+                    (row['1MO'] > quantiles.loc['1MO', '95th Quantile']) |
+                    (row['YTD'] > quantiles.loc['YTD', '95th Quantile']))
             )
             neg_condition = (
-                    ((row['1D vs. Sector'] < quantiles.loc['1D vs. Sector', '1th Quantile']) |
-                    (row['5D vs. Sector'] < quantiles.loc['5D vs. Sector', '1th Quantile']) |
-                    (row['1MO vs. Sector'] < quantiles.loc['1MO vs. Sector', '1th Quantile']) |
-                    (row['YTD vs. Sector'] < quantiles.loc['YTD vs. Sector', '1th Quantile'])) &
-                    ((row['1D'] < quantiles.loc['1D', '1th Quantile']) |
-                    (row['5D'] < quantiles.loc['5D', '1th Quantile']) |
-                    (row['1MO'] < quantiles.loc['1MO', '1th Quantile']) |
-                    (row['YTD'] < quantiles.loc['YTD', '1th Quantile']))
+                    ((row['1D vs. Sector'] < quantiles.loc['1D vs. Sector', '5th Quantile']) |
+                    (row['5D vs. Sector'] < quantiles.loc['5D vs. Sector', '5th Quantile']) |
+                    (row['1MO vs. Sector'] < quantiles.loc['1MO vs. Sector', '5th Quantile']) |
+                    (row['YTD vs. Sector'] < quantiles.loc['YTD vs. Sector', '5th Quantile'])) &
+                    ((row['1D'] < quantiles.loc['1D', '5th Quantile']) |
+                    (row['5D'] < quantiles.loc['5D', '5th Quantile']) |
+                    (row['1MO'] < quantiles.loc['1MO', '5th Quantile']) |
+                    (row['YTD'] < quantiles.loc['YTD', '5th Quantile']))
             )
         else:
             pos_condition = (
-                    (row['1D vs. Sector'] > quantiles.loc['1D vs. Sector', '99th Quantile']) |
-                    (row['5D vs. Sector'] > quantiles.loc['5D vs. Sector', '99th Quantile']) |
-                    (row['1MO vs. Sector'] > quantiles.loc['1MO vs. Sector', '99th Quantile'])
+                    (row['1D vs. Sector'] > quantiles.loc['1D vs. Sector', '95th Quantile']) |
+                    (row['5D vs. Sector'] > quantiles.loc['5D vs. Sector', '95th Quantile']) |
+                    (row['1MO vs. Sector'] > quantiles.loc['1MO vs. Sector', '95th Quantile'])
             )
             neg_condition = (
-                    ((row['1D vs. Sector'] < quantiles.loc['1D vs. Sector', '1th Quantile']) |
-                    (row['5D vs. Sector'] < quantiles.loc['5D vs. Sector', '1th Quantile']) |
-                    (row['1MO vs. Sector'] < quantiles.loc['1MO vs. Sector', '1th Quantile'])) |
-                    (row['% since AEQ'] < -5) #| (row['Δ 200D Mvag'] < -5) | (row['Δ 52 Week High'] < -10)
+                    ((row['1D vs. Sector'] < quantiles.loc['1D vs. Sector', '5th Quantile']) |
+                    (row['5D vs. Sector'] < quantiles.loc['5D vs. Sector', '5th Quantile']) |
+                    (row['1MO vs. Sector'] < quantiles.loc['1MO vs. Sector', '5th Quantile']) |
+                    (row['YTD vs. Sector'] < quantiles.loc['YTD vs. Sector', '5th Quantile'])) |
+                    (row['% since AEQ'] < -5) #| (row['Δ 200D Mvag'] < -10) | (row['Δ 52 Week High'] < -15)
             )
 
         if pos_condition:
@@ -318,3 +319,21 @@ columns_to_analyze = ['1D', '5D', '1MO', 'YTD', '1D vs. Sector', '5D vs. Sector'
 
 us_quantiles = calculate_quantiles(us, columns_to_analyze)
 eu_quantiles = calculate_quantiles(eu, columns_to_analyze)
+
+
+us_metrics_positions = f"""
+   1D vs. Sector < <b>{us_quantiles.loc['1D vs. Sector', '5th Quantile']}%</b>, oder<br>
+   5D vs. Sector < <b>{us_quantiles.loc['5D vs. Sector', '5th Quantile']}%</b>, oder<br>
+   1MO vs. Sector < <b>{us_quantiles.loc['1MO vs. Sector', '5th Quantile']}%</b>, oder<br>
+   YTD vs. Sector < <b>{us_quantiles.loc['YTD vs. Sector', '5th Quantile']}%
+"""
+
+eu_metrics_positions = f"""
+   1D vs. Sector < <b>{eu_quantiles.loc['1D vs. Sector', '5th Quantile']}%</b>, oder<br>
+   5D vs. Sector < <b>{eu_quantiles.loc['5D vs. Sector', '5th Quantile']}%</b>, oder<br>
+   1MO vs. Sector < <b>{eu_quantiles.loc['1MO vs. Sector', '5th Quantile']}%</b>, oder<br>
+   YTD vs. Sector < <b>{eu_quantiles.loc['YTD vs. Sector', '5th Quantile']}%
+"""
+
+print(us_metrics_positions)
+print(eu_metrics_positions)
