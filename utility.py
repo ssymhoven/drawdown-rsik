@@ -169,7 +169,7 @@ def write_mail(positioning_data: Dict, futures_data: Dict, risk_data: Dict, thir
     outlook = win32.Dispatch('outlook.application')
     mail = outlook.CreateItem(0)
 
-    mail.Subject = "Daily Reporting"
+    mail.Subject = "Daily Briefing"
 
     mail.Recipients.Add("pm-aktien")
     mail.Recipients.Add("amstatuser@donner-reuschel.lu")
