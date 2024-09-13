@@ -165,7 +165,7 @@ def group_funds(positions: pd.DataFrame) -> pd.DataFrame:
     return positions
 
 
-def write_mail(positioning_data: Dict, futures_data: Dict, risk_data: Dict, third_party_data: Dict):
+def write_mail(positioning_data: Dict, futures_data: Dict, risk_data: Dict, third_party_data: Dict, allocation_data: Dict):
     outlook = win32.Dispatch('outlook.application')
     mail = outlook.CreateItem(0)
 
@@ -188,6 +188,11 @@ def write_mail(positioning_data: Dict, futures_data: Dict, risk_data: Dict, thir
         cid = inplace_chart(image_path)
         region_sector_text += f'<h3>{key}</h3><img src="cid:{cid}">'
 
+    allocation_text = '<h1>Aktuelle Allokation</h1>'
+    for key, image_path in allocation_data.items():
+        cid = inplace_chart(image_path)
+        allocation_text += f'<h3>{key}</h3><img src="cid:{cid}">'
+
     if 'futures' in futures_data.keys():
         futures_text = f"""<h1>Aktuelle Future Positionen</h1>
            <img src="cid:{inplace_chart(image_path=futures_data.get('futures'))}">"""
@@ -204,8 +209,8 @@ def write_mail(positioning_data: Dict, futures_data: Dict, risk_data: Dict, thir
       <head></head>
       <body>
         <p>Guten Morgen, <br><br>
-            
             {region_sector_text}
+            {allocation_text}
             <h1>Drawdown</h1>
             <img src="cid:{inplace_chart(futures_data.get('drawdown'))}">
             {futures_text}

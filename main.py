@@ -1,6 +1,7 @@
 import locale
 import os
 
+from bm import generate_allocation_report
 from futures import generate_futures_report
 from positioning import generate_positioning_report
 from risk import generate_risk_report
@@ -17,8 +18,9 @@ if __name__ == '__main__':
     futures_mail_data = generate_futures_report()
     risk_mail_data = generate_risk_report()
     third_party_mail_data = generate_third_party_report()
+    allocation_mail_data = generate_allocation_report()
 
-    write_mail(positioning_mail_data, futures_mail_data, risk_mail_data, third_party_mail_data)
+    write_mail(positioning_mail_data, futures_mail_data, risk_mail_data, third_party_mail_data, allocation_mail_data)
 
 
 
