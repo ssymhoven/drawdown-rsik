@@ -179,23 +179,27 @@ def plot_combined_dataframe(benchmark: pd.DataFrame, portfolio: pd.DataFrame, na
     sector = style_and_export_combined(combined_sector, name, "Sector")
 
     benchmark_region = benchmark.dropna(subset=['cntry_issue_iso'])
-    benchmark_region['cntry_issue_iso'] = benchmark_region['cntry_issue_iso'].apply(
-        lambda x: 'US' if x == 'US' else 'EU')
     benchmark_region = group(benchmark_region, 'cntry_issue_iso', 'current_weight')
 
     portfolio_region = portfolio.dropna(subset=['country'])
-    portfolio_region['country'] = portfolio_region['country'].apply(
-        lambda x: 'US' if x == 'US' else 'EU')
     portfolio_region = group(portfolio_region, 'country', 'Exposure')
 
     combined = pd.merge(benchmark_region, portfolio_region, left_index=True, right_index=True, how='outer',
                                suffixes=('_benchmark', '_portfolio')).fillna(0)
     combined.columns = ['Benchmark', 'Portfolio']
-    combined['Difference'] = combined['Portfolio'] - combined['Benchmark']
-    combined.loc['Sum'] = combined.sum()
-    combined.index.name = "Region"
 
-    region = style_and_export_combined(combined, name, "Region")
+    combined['Difference'] = combined['Portfolio'] - combined['Benchmark']
+    combined['Abs_Difference'] = combined['Difference'].abs()
+    filtered_combined = combined[combined['Abs_Difference'] > 2]
+    other_row = combined[combined['Abs_Difference'] <= 2].sum()
+    other_row.name = 'Other'
+    filtered_combined = pd.concat([filtered_combined, other_row.to_frame().T])
+    filtered_combined = filtered_combined.drop(columns=['Abs_Difference'])
+    filtered_combined.loc['Sum'] = filtered_combined.sum()
+
+    filtered_combined.index.name = "Region"
+
+    region = style_and_export_combined(filtered_combined, name, "Region")
 
     return sector, region
 
