@@ -259,3 +259,7 @@ def generate_allocation_report():
     }
 
     return mail_data
+
+
+if __name__ == '__main__':
+    generate_allocation_report()
