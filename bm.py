@@ -41,8 +41,91 @@ query = """
                                           FROM
                                             reportings)
     """
-
+hedge_query = """
+        SELECT
+             accountsegments.currency as "base_currency",
+             positions.name,
+             positions.isin,
+             positions.asset_class,
+             positions.bloomberg_query,
+             positions.currency as Currency,
+             positions.eff_volume as volume,
+             positions.position_type,
+             positions.forex_trade_currency,
+             positions.average_entry_quote,
+             positions.last_quote as last_quote,
+             positions.total_exposure as total_exposure,
+             positions.last_xrate_quantity,
+             positions.value_base_ccy as value,
+             positions.profit_and_loss_percent,
+             positions.country_of_domicile as country,
+             positions.gics_industry_sector as sector,
+             positions.dr_class_level_1
+        FROM
+            reportings
+                JOIN
+            accountsegments ON (accountsegments.reporting_uuid = reportings.uuid)
+                JOIN
+            positions ON (reportings.uuid = positions.reporting_uuid)
+        WHERE
+            accountsegments.accountsegment_id in ('{mandate}')
+                AND positions.account_segment_id = accountsegments.accountsegment_id
+                AND reportings.newest = 1
+                AND reportings.report_date = (SELECT
+                    MAX(report_date)
+                FROM
+                    reportings)
+                AND reportings.report = 'positions'
+    """
 opus = OpusSource()
+
+
+def get_hedge(id: str) -> pd.DataFrame:
+    portfolio = opus.read_sql(query=hedge_query.format(mandate=id))
+    nav = portfolio['value'].sum()
+
+    # Adjustments
+    portfolio = portfolio[
+        (portfolio['asset_class'] != "BOND") &
+        (portfolio['dr_class_level_1'] != "FIXED INCOME")
+    ]
+
+    # Need to ignore FX Future, total_exposure is already in base currency
+    ignore_mask = (portfolio["asset_class"] == "FUTURE") & (portfolio["dr_class_level_1"] == "FX")
+
+    portfolio.loc[(portfolio["asset_class"] == "FOREX") & (~ignore_mask), "total_exposure"] *= (
+                1 / portfolio["last_xrate_quantity"])
+
+    portfolio.loc[(portfolio["asset_class"] != "FOREX") & (~ignore_mask), "total_exposure"] *= portfolio[
+        "last_xrate_quantity"]
+
+    portfolio["total_exposure_pct"] = portfolio["total_exposure"] / nav
+
+    # Calcs
+    cash_mask = portfolio["asset_class"] == "CASH"
+
+    stocks_mask = portfolio["asset_class"] == "STOCK"
+    futures_mask = (portfolio["asset_class"] == "FUTURE") & (portfolio["dr_class_level_1"] == "EQUITY")
+
+    futures_fx_mask = ((portfolio["asset_class"] == "FUTURE") & (portfolio["dr_class_level_1"] == "FX"))
+    forex_mask = (portfolio["asset_class"] == "FOREX")
+
+    portfolio.loc[portfolio['asset_class'] == 'FOREX', 'Currency'] = portfolio['forex_trade_currency']
+
+    currency = portfolio.groupby('Currency').apply(lambda df: pd.Series({
+        'Stocks': df.loc[stocks_mask, 'total_exposure_pct'].sum() * 100,
+        'Cash': df.loc[cash_mask, 'total_exposure_pct'].sum() * 100,
+        'Futures': df.loc[futures_mask, 'total_exposure_pct'].sum() * 100,
+        'Forex': df.loc[futures_fx_mask, 'total_exposure_pct'].sum() * -1 * 100 + df.loc[forex_mask, 'total_exposure_pct'].sum() * 100
+    })).reset_index()
+
+    currency["Sum"] = currency[["Stocks", "Cash", "Futures", "Forex"]].sum(axis=1)
+    total_row = pd.DataFrame(currency[["Stocks", "Cash", "Futures", "Forex", "Sum"]].sum()).T
+    total_row["Currency"] = "Total"
+    currency = pd.concat([currency, total_row], ignore_index=True)
+    currency.set_index('Currency', inplace=True)
+
+    return currency
 
 
 def get_benchmark_positions() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
@@ -245,17 +328,48 @@ def style_and_export_combined(df: pd.DataFrame, fund: str, kind: str) -> str:
     return path
 
 
+def plot_hedge(df: pd.DataFrame, fund: str):
+    styled = (
+        df.style
+        .set_table_styles([
+            {'selector': 'th.col0',
+             'props': [('border-left', '1px solid black')]},
+            {'selector': 'td.col0',
+             'props': [('border-left', '1px solid black')]},
+            {'selector': 'th.col4',
+             'props': [('border-left', '1px solid black')]},
+            {'selector': 'td.col4',
+             'props': [('border-left', '1px solid black')]},
+            {'selector': 'tr:last-child th, tr:last-child td',
+             'props': [('border-top', '1px solid black')]}
+        ])
+        .format({
+            'Stocks': "{:.2f}%",
+            'Futures': "{:.2f}%",
+            'Cash': "{:.2f}%",
+            'Forex': "{:.2f}%",
+            'Sum': "{:.2f}%"
+        }))
+
+    path = f'output/allocation/Hedge_{fund.replace("&", "_").replace(" ", "_")}.png'
+    dfi.export(styled, path, table_conversion="selenium")
+    return path
+
+
 def generate_allocation_report():
     sxxp, spx, benchmark = get_benchmark_positions()
 
-    name = "D&R Aktien"
+    name = "D&R Aktien Nachhaltigkeit"
     aktien = get_account_positions(id=mandate.get(name))
 
     aktien_sector, aktien_region = plot_combined_dataframe(benchmark, aktien, name)
+    hedge_port = get_hedge(id=mandate.get(name))
+    hedge_chart = plot_hedge(df=hedge_port, fund=name)
 
     mail_data = {
         "D&R Aktien nach Sektoren": aktien_sector,
-        "D&R Aktien nach Regionen": aktien_region
+        "D&R Aktien nach Regionen": aktien_region,
+        'Currency Exposure': hedge_chart
     }
 
     return mail_data
