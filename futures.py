@@ -69,3 +69,7 @@ def generate_futures_report():
     cleanup_aux_files()
 
     return mail_data
+
+
+if __name__ == '__main__':
+    generate_futures_report()
