@@ -170,6 +170,7 @@ def group(df: pd.DataFrame, group_by_col: str, sum_col: str) -> pd.DataFrame:
 
 
 def calculate_initials_weights(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.dropna(axis=0)
     num_stocks = len(df)
     equal_weight = 1 / num_stocks
 
