@@ -360,7 +360,7 @@ def plot_hedge(df: pd.DataFrame, fund: str):
 def generate_allocation_report():
     sxxp, spx, benchmark = get_benchmark_positions()
 
-    name = "D&R Aktien"
+    name = "D&R Aktien Nachhaltigkeit"
     aktien = get_account_positions(id=mandate.get(name))
 
     aktien_sector, aktien_region = plot_combined_dataframe(benchmark, aktien, name)
