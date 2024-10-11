@@ -20,5 +20,4 @@ def generate_risk_report():
                                                                  name=f'{name}_underperformed')
         risk.update({name: underperformed_details_chart})
 
-
     return risk
