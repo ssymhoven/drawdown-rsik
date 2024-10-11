@@ -273,6 +273,8 @@ def plot_combined_dataframe(benchmark: pd.DataFrame, portfolio: pd.DataFrame, na
     combined.columns = ['Benchmark', 'Portfolio']
 
     combined['Difference'] = combined['Portfolio'] - combined['Benchmark']
+    style_and_export_combined(combined, name, "Region_All")
+
     combined['Abs_Difference'] = combined['Difference'].abs()
     filtered_combined = combined[combined['Abs_Difference'] > 2]
     other_row = combined[combined['Abs_Difference'] <= 2].sum()
