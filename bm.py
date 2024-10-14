@@ -257,8 +257,24 @@ def plot_combined_dataframe(benchmark: pd.DataFrame, portfolio: pd.DataFrame, na
                                suffixes=('_benchmark', '_portfolio')).fillna(0)
     combined_sector.columns = ['Benchmark', 'Portfolio']
     combined_sector['Difference'] = combined_sector['Portfolio'] - combined_sector['Benchmark']
-    combined_sector.loc['Sum'] = combined_sector.sum()
+
     combined_sector.index.name = "Sector"
+    sector_mapping = {
+        'Information Technology': '45 Information Technology',
+        'Health Care': '35 Health Care',
+        'Financials': '40 Financials',
+        'Consumer Discretionary': '25 Consumer Discretionary',
+        'Energy': '10 Energy',
+        'Industrials': '20 Industrials',
+        'Materials': '15 Materials',
+        'Consumer Staples': '30 Consumer Staples',
+        'Utilities': '55 Utilities',
+        'Real Estate': '60 Real Estate',
+        'Communication Services': '50 Communication Services'
+    }
+    combined_sector.index = combined_sector.index.map(sector_mapping)
+    combined_sector = combined_sector.sort_index()
+    combined_sector.loc['Sum'] = combined_sector.sum()
 
     sector = style_and_export_combined(combined_sector, name, "Sector")
 
@@ -362,7 +378,7 @@ def plot_hedge(df: pd.DataFrame, fund: str):
 def generate_allocation_report():
     sxxp, spx, benchmark = get_benchmark_positions()
 
-    name = "D&R Aktien Nachhaltigkeit"
+    name = "D&R Aktien"
     aktien = get_account_positions(id=mandate.get(name))
 
     aktien_sector, aktien_region = plot_combined_dataframe(benchmark, aktien, name)
