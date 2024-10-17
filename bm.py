@@ -258,7 +258,7 @@ def plot_combined_dataframe(benchmark: pd.DataFrame, portfolio: pd.DataFrame, na
     combined_sector.columns = ['Benchmark', 'Portfolio']
     combined_sector['Difference'] = combined_sector['Portfolio'] - combined_sector['Benchmark']
 
-    combined_sector.index.name = "Sector"
+    combined_sector.index.name = "EU/US Sector"
     sector_mapping = {
         'Information Technology': '45 Information Technology',
         'Health Care': '35 Health Care',
@@ -302,6 +302,46 @@ def plot_combined_dataframe(benchmark: pd.DataFrame, portfolio: pd.DataFrame, na
     filtered_combined.index.name = "Region"
 
     region = style_and_export_combined(filtered_combined, name, "Region")
+
+    # US and Non-US Stocks Processing
+    us_country_code = 'US'
+    benchmark_us = benchmark[benchmark['cntry_issue_iso'] == us_country_code]
+    portfolio_us = portfolio[portfolio['country'] == us_country_code]
+    benchmark_non_us = benchmark[benchmark['cntry_issue_iso'] != us_country_code]
+    portfolio_non_us = portfolio[portfolio['country'] != us_country_code]
+
+    benchmark_us_grouped = group(benchmark_us, 'gics_sector_name', 'current_weight')
+    portfolio_us_grouped = group(portfolio_us, 'Sector', 'Exposure')
+
+    combined_us = pd.merge(benchmark_us_grouped, portfolio_us_grouped, left_index=True, right_index=True, how='outer',
+                           suffixes=('_benchmark', '_portfolio')).fillna(0)
+    combined_us.columns = ['Benchmark', 'Portfolio']
+    combined_us['Difference'] = combined_us['Portfolio'] - combined_us['Benchmark']
+
+    combined_us.index = combined_us.index.map(sector_mapping)
+    combined_us = combined_us.sort_index()
+    combined_us.loc['Sum'] = combined_us.sum()
+    combined_us.index.name = "US Sector"
+
+    us_stocks_chart = style_and_export_combined(combined_us, name, "US_Stocks")
+
+    # Group Non-US Data
+    benchmark_non_us_grouped = group(benchmark_non_us, 'gics_sector_name', 'current_weight')
+    portfolio_non_us_grouped = group(portfolio_non_us, 'Sector', 'Exposure')
+
+    combined_non_us = pd.merge(benchmark_non_us_grouped, portfolio_non_us_grouped, left_index=True, right_index=True,
+                               how='outer',
+                               suffixes=('_benchmark', '_portfolio')).fillna(0)
+    combined_non_us.columns = ['Benchmark', 'Portfolio']
+    combined_non_us['Difference'] = combined_non_us['Portfolio'] - combined_non_us['Benchmark']
+
+    combined_non_us.index = combined_non_us.index.map(sector_mapping)
+    combined_non_us = combined_non_us.sort_index()
+    combined_non_us.loc['Sum'] = combined_non_us.sum()
+    combined_non_us.index.name = "EU Sector"
+
+    # Export Non-US Stocks Chart
+    non_us_stocks_chart = style_and_export_combined(combined_non_us, name, "EU_Stocks")
 
     return sector, region
 
@@ -378,7 +418,7 @@ def plot_hedge(df: pd.DataFrame, fund: str):
 def generate_allocation_report():
     sxxp, spx, benchmark = get_benchmark_positions()
 
-    name = "D&R Aktien Nachhaltigkeit"
+    name = "D&R Aktien"
     aktien = get_account_positions(id=mandate.get(name))
 
     aktien_sector, aktien_region = plot_combined_dataframe(benchmark, aktien, name)
