@@ -197,7 +197,7 @@ def write_mail(positioning_data: Dict, futures_data: Dict, risk_data: Dict, thir
         futures_text = f"""<h1>Aktuelle Future Positionen</h1>
            <img src="cid:{inplace_chart(image_path=futures_data.get('futures'))}">"""
     else:
-        futures_text = "Aktuell keine aktiven Future Postionen."
+        futures_text = "Aktuell keine aktiven Future Positionen."
 
     risk_text = '<h1>Risikomanagement</h1>'
     for key, image_path in risk_data.items():
