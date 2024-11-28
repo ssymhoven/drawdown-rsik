@@ -57,6 +57,7 @@ hedge_query = """
              positions.total_exposure as total_exposure,
              positions.last_xrate_quantity,
              positions.value_base_ccy as value,
+             positions.percent_nav,
              positions.profit_and_loss_percent,
              positions.country_of_domicile as country,
              positions.gics_industry_sector as sector,
@@ -115,7 +116,7 @@ def get_hedge(id: str) -> pd.DataFrame:
     currency = portfolio.groupby('Currency').apply(lambda df: pd.Series({
         'Stocks': df.loc[stocks_mask, 'total_exposure_pct'].sum() * 100,
         'Cash': df.loc[cash_mask, 'total_exposure_pct'].sum() * 100,
-        'Futures': df.loc[futures_mask, 'total_exposure_pct'].sum() * 100,
+        'Futures': df.loc[futures_mask, 'percent_nav'].sum(),
         'Forex': df.loc[futures_fx_mask, 'total_exposure_pct'].sum() * -1 * 100 + df.loc[forex_mask, 'total_exposure_pct'].sum() * 100
     })).reset_index()
 
