@@ -174,7 +174,6 @@ def write_mail(positioning_data: Dict, futures_data: Dict, risk_data: Dict, thir
     mail.Recipients.Add("pm-aktien")
     mail.Recipients.Add("amstatuser@donner-reuschel.lu")
     mail.Recipients.Add("jan.sandermann@donner-reuschel.de")
-    mail.Recipients.Add("sadettin.yildiz@donner-reuschel.de").Type = 2
 
     def inplace_chart(image_path: str):
         image_path = os.path.abspath(image_path)
